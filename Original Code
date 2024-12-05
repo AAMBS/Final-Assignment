@@ -2,7 +2,6 @@ import tkinter as tk
 import tkinter.messagebox as messagebox
 import datetime
 import pickle
-import os
 
 
 class TicketBookingSystem:
