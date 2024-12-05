@@ -1,0 +1,1198 @@
+import tkinter as tk
+import tkinter.messagebox as messagebox
+import datetime
+import pickle
+import os
+
+
+class TicketBookingSystem:
+    def __init__(self):
+        self.__registered_guests = []  # List of Guest objects
+        self.__admin = None           # Admin object
+        self.__events = []
+        self.__total_sales = 0
+
+    # Getters and Setters
+    def get_registered_guests(self):
+        return self.__registered_guests
+
+    def get_admin(self):
+        return self.__admin
+
+    def set_admin(self, admin):
+        self.__admin = admin
+
+    def get_total_sales(self):
+        return self.__total_sales
+
+    def set_total_sales(self, ts):
+        self.__total_sales = ts
+
+    def increase_sale_count(self, num):
+        self.__total_sales += num
+
+    # Methods
+    def register_new_guest(self, new_guest):
+        """Adding a new guest to the system."""
+        self.__registered_guests.append(new_guest)
+
+    def delete_guest(self, guest_id):
+        """Deleting a guest from the system by their ID."""
+
+        for guest in self.__registered_guests:
+            if guest.get_guest_id() == guest_id:
+                self.__registered_guests.remove(guest)
+                return True
+
+        return False
+
+    def fetch_guest_by_id(self, id):
+        '''
+        Returns a guest by the id
+        '''
+        for g in self.__registered_guests:
+            if g.get_guest_id() == id:
+                return g
+
+        return False
+
+    def fetch_guest_by_name(self, name):
+        '''
+        Returns a guest by name
+        '''
+        for g in self.__registered_guests:
+            print(name, g.get_name())
+            if g.get_name() == name:
+                return g
+
+        return False
+
+    def get_events(self):
+        return self.__events
+
+    def create_event(self, name, start_date, end_date):
+        '''
+        Creates event and adds it into the system
+        '''
+        event = Event(name, start_date, end_date)
+        self.__events.append(event)
+
+    def fetch_guest_purchase_history(self, guest_name):
+        '''
+        Returns the purchase history for the guest
+        '''
+        guest = self.fetch_guest_by_name(guest_name)
+        return guest.purchase_history()
+
+    def get_tickets(self):
+        t1 = SingleDayPass(1, 275, "")
+        t2 = TwoDayPass(2, 480, "")
+        t3 = AnnualMembership(3, 1840, "")
+        t4 = ChildTicket(4, 185, "")
+        t5 = GroupTicket(5, 220, "")
+        t6 = VIPExperiencePass(6, 550, "")
+
+        return [t1, t2, t3, t4, t5, t6]
+
+
+class Event:
+    def __init__(self, name, start_date, end_date):
+        self.__name = name
+        self.__start_date = start_date
+        self.__end_date = end_date
+
+        self.__save_to_file()
+
+    def get_name(self):
+        return self.__name
+
+    def set_name(self, name):
+        self.__name = name
+
+    def get_start_date(self):
+        return self.__start_date
+
+    def set_start_date(self, start_date):
+        self.__start_date = start_date
+
+    def get_end_date(self):
+        return self.__end_date
+
+    def set_end_date(self, end_date):
+        self.__end_date = end_date
+
+    def __save_to_file(self):
+        '''
+        Saves the object into a pickle file.
+        '''
+        events = Event.__load_events()  # Load existing events
+        if self not in events:  # Check for duplicate
+            events.append(self)  # Add new event
+            with open("events.pkl", "wb") as file:
+                pickle.dump(events, file)
+
+    # Class method to load all events
+    @classmethod
+    def __load_events(cls):
+        if not os.path.exists("events.pkl"):  # Check if file exists
+            return []
+        with open("events.pkl", "rb") as file:
+            return pickle.load(file)
+
+
+class Guest:
+    def __init__(self, guest_id, name, email, phone):
+        self.__guest_id = guest_id
+        self.__name = name
+        self.__email = email
+        self.__phone = phone
+        self.__purchase_orders = []
+
+        # Load existing guests and save this guest to file
+        guests = self.load_guests()
+        for idx, guest in enumerate(guests):
+            if guest.get_guest_id() == self.__guest_id:
+                guests[idx] = self  # Update existing guest
+                break
+        else:
+            guests.append(self)  # Add new guest
+
+        self.save_guests_to_file(guests)
+
+    def get_guest_id(self):
+        return self.__guest_id
+
+    def get_name(self):
+        return self.__name
+
+    def get_email(self):
+        return self.__email
+
+    def get_phone(self):
+        return self.__phone
+
+    def get_purchase_orders(self):
+        return self.__purchase_orders
+
+    def set_name(self, name):
+        self.__name = name
+
+    def set_email(self, email):
+        self.__email = email
+
+    def set_phone(self, phone):
+        self.__phone = phone
+
+    def add_purchase_order(self, purchase_order, system):
+        """Add a purchase order to the guest's history."""
+        self.__purchase_orders.append(purchase_order)
+        system.increase_sale_count(len(purchase_order.get_tickets()))
+
+    def purchase_history(self):
+        """Return a string representation of the guest's purchase history."""
+        if not self.__purchase_orders:
+            return "No purchase history available."
+
+        history = f"Purchase History for {self.__name}:\n"
+        history += "=" * 40 + "\n"
+
+        for order in self.__purchase_orders:
+            history += f"Order ID: {order.get_order_id()}\n"
+            history += f"Order Date: {order.get_order_date()}\n"
+            history += f"Total Price: ${order.get_total_price():.2f}\n"
+            history += "Tickets:\n"
+
+            # Loop through tickets in the order
+            for ticket in order.get_tickets():
+                history += (
+                    f"  - Ticket ID: {ticket.get_ticket_id()}\n"
+                    f"    Description: {ticket.get_description()}\n"
+                    f"    Price: ${ticket.get_price():.2f}\n"
+                    f"    Visit Date: {ticket.get_visit_date()}\n"
+                    f"    Limitations: {ticket.get_limitations()}\n"
+                    f"    Validity: {ticket.get_validity()} days\n"
+                    f"    Discount Available: {'Yes' if ticket.get_discount_available() else 'No'}\n"
+                )
+            history += "-" * 40 + "\n"
+
+        return history
+
+    def save_guests_to_file(self, guests):
+        """Save the list of guests to a file."""
+        with open("guests.pkl", "wb") as file:
+            pickle.dump(guests, file)
+
+    def load_guests(self):
+        """Load the list of guests from a file."""
+        try:
+            with open("guests.pkl", "rb") as file:
+                return pickle.load(file)
+        except (FileNotFoundError, EOFError):
+            return []
+
+
+class PurchaseOrder:
+    def __init__(self, order_id, tickets, total_price, order_date):
+        self.__order_id = order_id
+        self.__tickets = tickets
+        self.__total_price = total_price
+        self.__order_date = order_date
+
+        self.__save_to_file()
+
+    def get_order_id(self):
+        return self.__order_id
+
+    def get_tickets(self):
+        return self.__tickets
+
+    def get_total_price(self):
+        return self.__total_price
+
+    def get_order_date(self):
+        return self.__order_date
+
+    def set_tickets(self, tickets):
+        self.__tickets = tickets
+
+    def set_total_price(self, total_price):
+        self.__total_price = total_price
+
+    def set_order_date(self, order_date):
+        self.__order_date = order_date
+
+    def __save_to_file(self):
+        '''
+        Saves the purchase order object into pickle file.
+        '''
+        orders = PurchaseOrder.__load_orders()
+        for idx, order in enumerate(orders):
+            if order.get_order_id() == self.__order_id:
+                orders[idx] = self  # Update existing order
+                break
+        else:
+            orders.append(self)  # Add new order
+
+        with open("purchase_orders.pkl", "wb") as file:
+            pickle.dump(orders, file)
+
+    @classmethod
+    def __load_orders(cls):
+        if not os.path.exists("purchase_orders.pkl"):
+            return []
+        with open("purchase_orders.pkl", "rb") as file:
+            return pickle.load(file)
+
+
+class Ticket:
+    def __init__(self, ticket_id, price, visit_date, description, limitations, validity, discount_available):
+        self.__ticket_id = ticket_id
+        self.__price = price
+        self.__visit_date = visit_date
+        self.__description = description
+        self.__limitations = limitations
+        self.__validity = validity
+        self.__discount_available = discount_available
+
+        self.__save_to_file()
+
+    def get_ticket_id(self):
+        return self.__ticket_id
+
+    def get_price(self):
+        return self.__price
+
+    def get_visit_date(self):
+        return self.__visit_date
+
+    def get_description(self):
+        return self.__description
+
+    def get_limitations(self):
+        return self.__limitations
+
+    def get_validity(self):
+        return self.__validity
+
+    def get_discount_available(self):
+        return self.__discount_available
+
+    def set_price(self, price):
+        self.__price = price
+
+    def set_visit_date(self, visit_date):
+        self.__visit_date = visit_date
+
+    def set_description(self, description):
+        self.__description = description
+
+    def set_limitations(self, limitations):
+        self.__limitations = limitations
+
+    def set_validity(self, validity):
+        self.__validity = validity
+
+    def set_discount_available(self, discount_available):
+        self.__discount_available = discount_available
+
+    def __save_to_file(self):
+        '''
+        Saves the ticket object into pickle file.
+        '''
+        tickets = Ticket.__load_tickets()
+        for idx, ticket in enumerate(tickets):
+            if ticket.get_ticket_id() == self.__ticket_id:
+                tickets[idx] = self
+                break
+        else:
+            tickets.append(self)
+
+        with open("tickets.pkl", "wb") as file:
+            pickle.dump(tickets, file)
+
+    @classmethod
+    def __load_tickets(cls):
+        if not os.path.exists("tickets.pkl"):
+            return []
+        with open("tickets.pkl", "rb") as file:
+            return pickle.load(file)
+
+
+class SingleDayPass(Ticket):
+    def __init__(self, ticket_id, price, visit_date):
+        super().__init__(ticket_id, price, visit_date,
+                         description="Access to the park for one day.",
+                         limitations="Valid only on selected date.",
+                         validity="1 day",
+                         discount_available="None")
+
+
+class TwoDayPass(Ticket):
+    def __init__(self, ticket_id, price, visit_date):
+        super().__init__(ticket_id, price, visit_date,
+                         description="Access to the park for two consecutive days.",
+                         limitations="Cannot be split over multiple trips.",
+                         validity="2 days",
+                         discount_available="10% discount for online purchase.")
+
+
+class AnnualMembership(Ticket):
+    def __init__(self, ticket_id, price, visit_date):
+        super().__init__(ticket_id, price, visit_date,
+                         description="Unlimited access for one year.",
+                         limitations="Must be used by the same person",
+                         validity="1 year",
+                         discount_available="15% discount on renewal.")
+
+
+class ChildTicket(Ticket):
+    def __init__(self, ticket_id, price, visit_date):
+        super().__init__(ticket_id, price, visit_date,
+                         description="Discounted ticket for children age (3-12)",
+                         limitations="Valid only on selected date must be accompanied by an adult.",
+                         validity="1 day",
+                         discount_available="None.")
+
+
+class GroupTicket(Ticket):
+    def __init__(self, ticket_id, price, visit_date):
+        super().__init__(ticket_id, price, visit_date,
+                         description="Special rate for groups of 10",
+                         limitations="Must be booked in advance.",
+                         validity="1 day",
+                         discount_available="20% off for groups of 20 or more.")
+        self.price = price
+
+    def get_price(self):
+        return self.price * 10
+
+
+class VIPExperiencePass(Ticket):
+    def __init__(self, ticket_id, price, visit_date):
+        super().__init__(ticket_id, price, visit_date,
+                         description="Includes expedited access and reserved seating for shows",
+                         limitations="Limited availability must be purchased in advance.",
+                         validity="1 day",
+                         discount_available="None.")
+
+
+class Admin:
+    def __init__(self, admin_id, name, email, password, system):
+        self.__admin_id = admin_id
+        self.__name = name
+        self.__email = email
+        self.__password = password
+        self.__bookingsystem = system
+
+    def get_admin_id(self):
+        return self.__admin_id
+
+    def get_name(self):
+        return self.__name
+
+    def get_email(self):
+        return self.__email
+
+    def set_name(self, name):
+        self.__name = name
+
+    def set_email(self, email):
+        self.__email = email
+
+
+ticket_auto_id = 0
+
+# creating objects for testing
+
+system = TicketBookingSystem()
+admin = Admin("Admin", "Joe", "Joe@gmail.com", "123456", system)
+guest_1 = Guest(1, "Ali", "Ali@gmail.com", "2837003")
+system.register_new_guest(guest_1)
+guest_2 = Guest(2, "Khalid", "Khalid@gmail.com", "8726384")
+system.register_new_guest(guest_2)
+guest_3 = Guest(3, "Mahmood", "Mahmood@gmail.com", "23894682")
+system.register_new_guest(guest_3)
+
+system.create_event("Magic & Illusion", "12/1/2024", "12/3/2024")
+system.create_event("Food Fiesta", "12/1/2024", "12/3/2024")
+system.create_event("Race Day", "12/1/2024", "12/3/2024")
+system.create_event("Spring Carnival", "12/1/2024", "12/3/2024")
+
+single_day_pass_discount = "None"
+two_day_pass_discount = "10% discount for online purchase."
+annual_membership_discount = "15% discount on renewal."
+child_ticket_discount = "None."
+group_ticket_discount = "20% off for groups of 20 or more."
+vip_experience_discount = "None."
+
+
+def open_registration_window():
+    reg_window = tk.Toplevel(root)
+    reg_window.title("Registration Window")
+    reg_window.geometry("400x400")
+    reg_window.configure(bg="#FFE4C4")
+
+    reg_label = tk.Label(
+        reg_window,
+        text="Register a New Guest",
+        font=("Arial", 16, "bold"),
+        bg="#FFE4C4",
+        fg="#4B4B4B",
+    )
+    reg_label.pack(pady=20)
+
+    id_label = tk.Label(reg_window, text="Guest ID:", font=(
+        "Arial", 12), bg="#FFE4C4", fg="#4B4B4B")
+    id_label.pack(anchor="w", padx=40, pady=5)
+    id_entry = tk.Entry(reg_window, font=("Arial", 12), width=30)
+    id_entry.pack(padx=40, pady=5)
+
+    name_label = tk.Label(reg_window, text="Name:", font=(
+        "Arial", 12), bg="#FFE4C4", fg="#4B4B4B")
+    name_label.pack(anchor="w", padx=40, pady=5)
+    name_entry = tk.Entry(reg_window, font=("Arial", 12), width=30)
+    name_entry.pack(padx=40, pady=5)
+
+    email_label = tk.Label(reg_window, text="Email:", font=(
+        "Arial", 12), bg="#FFE4C4", fg="#4B4B4B")
+    email_label.pack(anchor="w", padx=40, pady=5)
+    email_entry = tk.Entry(reg_window, font=("Arial", 12), width=30)
+    email_entry.pack(padx=40, pady=5)
+
+    phone_label = tk.Label(reg_window, text="Phone Number:", font=(
+        "Arial", 12), bg="#FFE4C4", fg="#4B4B4B")
+    phone_label.pack(anchor="w", padx=40, pady=5)
+    phone_entry = tk.Entry(reg_window, font=("Arial", 12), width=30)
+    phone_entry.pack(padx=40, pady=5)
+
+    def submit_registration():
+        guest_id = id_entry.get()
+        name = name_entry.get()
+        email = email_entry.get()
+        phone = phone_entry.get()
+
+        if not name or not email or not phone:
+            messagebox.showerror("Error", "All fields are required!")
+            return
+
+        guest = Guest(guest_id, name, email, phone)
+        system.register_new_guest(guest)
+
+        messagebox.showinfo(
+            "Success", f"Guest Registered:\n\nName: {name}\nEmail: {email}\nPhone: {phone}"
+        )
+        reg_window.destroy()
+
+    submit_button = tk.Button(
+        reg_window,
+        text="Submit",
+        font=("Arial", 12, "bold"),
+        bg="#008CBA",
+        fg="white",
+        width=15,
+        command=submit_registration,
+    )
+    submit_button.pack(pady=20)
+
+
+def open_delete_guest_window():
+    delete_window = tk.Toplevel(root)
+    delete_window.title("Guest Delete Window")
+    delete_window.geometry("400x400")
+    delete_window.configure(bg="#FFE4C4")
+
+    # Label for the window
+    delete_label = tk.Label(
+        delete_window,
+        text="Delete a Guest",
+        font=("Arial", 16, "bold"),
+        bg="#FFE4C4",
+        fg="#4B4B4B",
+    )
+    delete_label.pack(pady=20)
+
+    id_label = tk.Label(
+        delete_window,
+        text="Enter Guest ID:",
+        font=("Arial", 12),
+        bg="#FFE4C4",
+        fg="#4B4B4B",
+    )
+    id_label.pack(anchor="w", padx=40, pady=5)
+
+    id_entry = tk.Entry(delete_window, font=("Arial", 12), width=30)
+    id_entry.pack(padx=40, pady=10)
+
+    def delete_guest():
+        guest_id = id_entry.get()
+        if not guest_id:
+            messagebox.showerror("Error", "Guest ID cannot be empty!")
+            return
+
+        res = system.delete_guest(guest_id)
+        if res:
+            messagebox.showinfo(
+                "Success", f"Guest with ID {guest_id} has been deleted successfully!")
+            delete_window.destroy()
+        else:
+            messagebox.showerror(
+                "Failure", f"Guest with ID {guest_id} Not Found!")
+            delete_window.destroy()
+
+    delete_button = tk.Button(
+        delete_window,
+        text="Delete",
+        font=("Arial", 12, "bold"),
+        bg="#008CBA",
+        fg="white",
+        width=15,
+        command=delete_guest,
+    )
+    delete_button.pack(pady=20)
+
+
+def open_purchase_ticket_window():
+    ticket_window = tk.Toplevel(root)
+    ticket_window.title("Purchase Ticket")
+    ticket_window.geometry("570x400")
+    ticket_window.configure(bg="#FFE4C4")
+
+    ticket_types = [
+        "Single Day Pass",
+        "Two Day Pass",
+        "Annual Membership",
+        "Child Ticket",
+        "Group Ticket",
+        "VIP Experience Pass",
+    ]
+    ticket_prices = {
+        "Single Day Pass": 275,
+        "Two Day Pass": 480,
+        "Annual Membership": 1840,
+        "Child Ticket": 185,
+        "Group Ticket": 220,
+        "VIP Experience Pass": 550,
+    }
+    selected_tickets = []
+    total_price = tk.IntVar(value=0)
+
+    order_id_label = tk.Label(
+        ticket_window, text="Order ID:", font=("Arial", 12), bg="#FFE4C4", fg="#4B4B4B"
+    )
+    order_id_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+    order_id_entry = tk.Entry(ticket_window, font=("Arial", 12), width=20)
+    order_id_entry.grid(row=0, column=1, padx=10, pady=10)
+
+    registered_guests = system.get_registered_guests()
+    guest_names = [guest.get_name() for guest in registered_guests]
+
+    if len(guest_names) == 0:
+        guest_names.append(["No Guests Available"])
+
+    guest_label = tk.Label(
+        ticket_window, text="Select Guest:", font=("Arial", 12), bg="#FFE4C4", fg="#4B4B4B"
+    )
+    guest_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+
+    guest_var = tk.StringVar(
+        value=guest_names[0] if guest_names else "No Guests Available")
+    guest_dropdown = tk.OptionMenu(ticket_window, guest_var, *guest_names)
+    guest_dropdown.grid(row=1, column=1, padx=10, pady=10)
+
+    ticket_label = tk.Label(
+        ticket_window, text="Select Ticket Type:", font=("Arial", 12), bg="#FFE4C4", fg="#4B4B4B"
+    )
+    ticket_label.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+
+    ticket_var = tk.StringVar(value=ticket_types[0])  # Default value
+    ticket_dropdown = tk.OptionMenu(ticket_window, ticket_var, *ticket_types)
+    ticket_dropdown.grid(row=2, column=1, padx=10, pady=10)
+
+    visit_date_label = tk.Label(
+        ticket_window, text="Visit Date:", font=("Arial", 12), bg="#FFE4C4", fg="#4B4B4B"
+    )
+    visit_date_label.grid(row=3, column=0, padx=10, pady=10, sticky="w")
+
+    visit_date_entry = tk.Entry(ticket_window, font=("Arial", 12), width=20)
+    visit_date_entry.grid(row=3, column=1, padx=10, pady=10)
+
+    payment_method_label = tk.Label(
+        ticket_window, text="Payment Method:", font=("Arial", 12), bg="#FFE4C4", fg="#4B4B4B"
+    )
+    payment_method_label.grid(row=4, column=0, padx=10, pady=10, sticky="w")
+
+    payment_method_var = tk.StringVar(value="Credit Card")  # Default value
+    payment_method_dropdown = tk.OptionMenu(
+        ticket_window, payment_method_var, "Credit Card", "Digital Wallet", "Cash")
+    payment_method_dropdown.grid(row=4, column=1, padx=10, pady=10)
+
+    summary_label = tk.Label(
+        ticket_window, text="Order Summary:", font=("Arial", 12), bg="#FFE4C4", fg="#4B4B4B"
+    )
+    summary_label.grid(row=0, column=2, padx=10, pady=10, sticky="w")
+
+    summary_text = tk.Text(ticket_window, font=(
+        "Arial", 10), width=25, height=15, state="disabled")
+    summary_text.grid(row=1, column=2, rowspan=4, padx=10, pady=10)
+
+    tickets = []
+
+    def add_ticket():
+        global ticket_auto_id
+
+        ticket = ticket_var.get()
+        price = ticket_prices[ticket]
+        selected_tickets.append((ticket, price))
+        total_price.set(total_price.get() + price)
+
+        summary_text.configure(state="normal")
+        summary_text.delete(1.0, tk.END)
+        for ticket, price in selected_tickets:
+            summary_text.insert(tk.END, f"{ticket} - ${price}\n")
+        summary_text.insert(tk.END, f"\nTotal Price: ${total_price.get()}")
+        summary_text.configure(state="disabled")
+
+        ticket_auto_id += 1
+
+        if ticket == "Single Day Pass":
+            ticket_obj = SingleDayPass(
+                ticket_auto_id, 275, visit_date_entry.get().strip())
+        elif ticket == "Two Day Pass":
+            ticket_obj = TwoDayPass(
+                ticket_auto_id, 480, visit_date_entry.get().strip())
+        elif ticket == "Annual Membership":
+            ticket_obj = AnnualMembership(
+                ticket_auto_id, 1840, visit_date_entry.get().strip())
+        elif ticket == "Child Ticket":
+            ticket_obj = ChildTicket(
+                ticket_auto_id, 185, visit_date_entry.get().strip())
+        elif ticket == "Group Ticket":
+            ticket_obj = GroupTicket(
+                ticket_auto_id, 220, visit_date_entry.get().strip())
+        elif ticket == "VIP Experience Pass":
+            ticket_obj = VIPExperiencePass(
+                ticket_auto_id, 550, visit_date_entry.get().strip())
+
+        tickets.append(ticket_obj)
+
+    add_ticket_button = tk.Button(
+        ticket_window,
+        text="Add Ticket",
+        font=("Arial", 12),
+        bg="#008CBA",  # Green
+        fg="white",
+        command=add_ticket,
+    )
+    add_ticket_button.grid(row=5, column=0, columnspan=2, pady=10)
+
+    total_order_amount = 0
+    for i in tickets:
+        total_order_amount += i.get_price()
+
+    def confirm_order():
+
+        order_id = order_id_entry.get()
+        order = PurchaseOrder(
+            order_id, tickets, total_order_amount, order_date=datetime.datetime.today())
+
+        guest = system.fetch_guest_by_name(guest_var.get())
+        guest.add_purchase_order(order, system)
+
+        messagebox.showinfo("Order Confirmed",
+                            "Your order has been successfully placed!")
+        ticket_window.destroy()
+
+    confirm_button = tk.Button(
+        ticket_window,
+        text="Confirm Order",
+        font=("Arial", 12, "bold"),
+        bg="#008CBA",  # Blue
+        fg="white",
+        command=confirm_order,
+    )
+    confirm_button.grid(row=5, column=2, columnspan=2, pady=0)
+
+
+def open_view_events_window():
+    events_window = tk.Toplevel(root)
+    events_window.title("View Events")
+    events_window.geometry("400x400")
+    events_window.configure(bg="#FFE4C4")
+
+    # Add a heading label
+    heading_label = tk.Label(
+        events_window,
+        text="Event List",
+        font=("Arial", 16, "bold"),
+        bg="#FFE4C4",
+        fg="#4B4B4B",
+    )
+    heading_label.pack(pady=10)
+
+    # Get the list of events from the system
+    events = system.get_events()
+
+    # If no events are available
+    if not events:
+        no_events_label = tk.Label(
+            events_window,
+            text="No events available.",
+            font=("Arial", 12),
+            bg="#FFE4C4",
+            fg="#4B4B4B",
+        )
+        no_events_label.pack(pady=20)
+        return
+
+    # Create a frame to hold the list of events
+    events_frame = tk.Frame(events_window, bg="#FFE4C4")
+    events_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+    # Add a scrollbar
+    scrollbar = tk.Scrollbar(events_frame, orient="vertical")
+    scrollbar.pack(side="right", fill="y")
+
+    # Create a listbox to display events
+    events_listbox = tk.Listbox(
+        events_frame,
+        font=("Arial", 12),
+        bg="#FFFFFF",
+        fg="#000000",
+        yscrollcommand=scrollbar.set,
+        width=50,
+        height=15,
+    )
+    events_listbox.pack(side="left", fill="both", expand=True)
+    scrollbar.config(command=events_listbox.yview)
+
+    # Populate the listbox with events
+    for event in events:
+        event_name = event.get_name()
+        start_date = event.get_start_date()
+        end_date = event.get_end_date()
+        events_listbox.insert(
+            tk.END, f"{event_name} - {start_date} to {end_date}")
+
+    # Close button
+    close_button = tk.Button(
+        events_window,
+        text="Close",
+        font=("Arial", 12, "bold"),
+        bg="#008CBA",  # Red button
+        fg="white",
+        command=events_window.destroy,
+    )
+    close_button.pack(pady=10)
+
+
+def admin_dashboard_window():
+    services_window = tk.Toplevel(root)
+    services_window.title("Admin Dashboard")
+    services_window.geometry("400x400")
+    services_window.configure(bg="#FFE4C4")
+
+    # Variables
+    ticket_types = [
+        "Single Day Pass",
+        "Two Day Pass",
+        "Annual Membership",
+        "Child Ticket",
+        "Group Ticket",
+        "VIP Experience Pass",
+    ]
+
+    # Fetch today's total sales
+    total_sales = system.get_total_sales()
+
+    # Display total sales for today
+    sales_label = tk.Label(
+        services_window,
+        text=f"Total Ticket Sales Today: {total_sales}",
+        font=("Arial", 14, "bold"),
+        bg="#FFE4C4",
+        fg="#4B4B4B",
+    )
+    sales_label.pack(pady=20)
+
+    # Dropdown to select ticket type
+    ticket_label = tk.Label(
+        services_window,
+        text="Select Ticket Type:",
+        font=("Arial", 12),
+        bg="#FFE4C4",
+        fg="#4B4B4B",
+    )
+    ticket_label.pack(pady=10)
+
+    ticket_var = tk.StringVar(value=ticket_types[0])  # Default value
+    ticket_dropdown = tk.OptionMenu(services_window, ticket_var, *ticket_types)
+    ticket_dropdown.pack(pady=10)
+
+    # Text field for modifying ticket discount
+    discount_label = tk.Label(
+        services_window,
+        text="Modify Discount Criteria:",
+        font=("Arial", 12),
+        bg="#FFE4C4",
+        fg="#4B4B4B",
+    )
+    discount_label.pack(pady=10)
+
+    discount_entry = tk.Entry(services_window, font=("Arial", 12), width=25)
+    discount_entry.pack(pady=10)
+
+    # Button to update discount
+    update_button = tk.Button(
+        services_window,
+        text="Update Discount",
+        font=("Arial", 12),
+        bg="#008CBA",
+        fg="white",
+        width=20,
+        command=lambda: update_ticket_discount(
+            ticket_var.get(), discount_entry.get()),
+    )
+    update_button.pack(pady=20)
+
+# Placeholder for the update logic, to be implemented separately
+
+
+def update_ticket_discount(ticket_type, new_discount_criteria):
+
+    global single_day_pass_discount, two_day_pass_discount
+    global annual_membership_discount, child_ticket_discount
+    global group_ticket_discount, vip_experience_discount
+
+    if ticket_type == "Single Day Pass":
+        single_day_pass_discount = new_discount_criteria
+    elif ticket_type == "Two Day Pass":
+        two_day_pass_discount = new_discount_criteria
+    elif ticket_type == "Annual Membership":
+        annual_membership_discount = new_discount_criteria
+    elif ticket_type == "Child Ticket":
+        child_ticket_discount = new_discount_criteria
+    elif ticket_type == "Group Ticket":
+        group_ticket_discount = new_discount_criteria
+    elif ticket_type == "VIP Experience Pass":
+        vip_experience_discount = new_discount_criteria
+
+    print(f"Updating {ticket_type} with new discount: {new_discount_criteria}")
+    # Logic to update the ticket's discount goes here
+
+
+def open_view_purchase_history_window():
+    history_window = tk.Toplevel(root)
+    history_window.title("View Purchase History")
+    history_window.geometry("500x500")
+    history_window.configure(bg="#FFE4C4")
+
+    # Fetch registered guests from the system
+    registered_guests = system.get_registered_guests()
+    guest_names = [guest.get_name()
+                   for guest in registered_guests]  # Extract guest names
+
+    # Fallback if no guests are registered
+    if not guest_names:
+        guest_names.append("No Guests Available")
+
+    # Guest selection dropdown
+    guest_label = tk.Label(
+        history_window, text="Select Guest:", font=("Arial", 12), bg="#FFE4C4", fg="#4B4B4B"
+    )
+    guest_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+    # Default value for guest dropdown
+    guest_var = tk.StringVar(value=guest_names[0])
+    guest_dropdown = tk.OptionMenu(history_window, guest_var, *guest_names)
+    guest_dropdown.grid(row=0, column=1, padx=10, pady=10)
+
+    # Text box to display purchase history
+    history_label = tk.Label(
+        history_window, text="Purchase History:", font=("Arial", 12, "bold"), bg="#FFE4C4", fg="#4B4B4B"
+    )
+    history_label.grid(row=1, column=0, padx=10, pady=10, sticky="nw")
+
+    history_text = tk.Text(history_window, font=(
+        "Arial", 8), width=50, height=15, wrap="word")
+    history_text.grid(row=1, column=1, padx=10, pady=10, columnspan=2)
+
+    # Function to fetch and display purchase history
+    def show_purchase_history():
+        selected_guest_name = guest_var.get()
+
+        # Clear previous history
+        history_text.delete("1.0", tk.END)
+
+        # Validate if the selected guest is valid
+        if selected_guest_name == "No Guests Available":
+            history_text.insert(tk.END, "No guests registered.")
+            return
+
+        # Fetch and display purchase history
+        purchase_history = system.fetch_guest_purchase_history(
+            selected_guest_name)
+
+        if not purchase_history:
+            history_text.insert(
+                tk.END, "No purchase history available for this guest.")
+        else:
+            history_text.insert(
+                tk.END,
+                purchase_history)
+
+    # Button to fetch and show purchase history
+    fetch_button = tk.Button(
+        history_window,
+        text="Show History",
+        font=("Arial", 12, "bold"),
+        bg="#008CBA",
+        fg="white",
+        command=show_purchase_history,
+    )
+    fetch_button.grid(row=2, column=1, pady=10, sticky="e")
+
+    # Close button
+    close_button = tk.Button(
+        history_window,
+        text="Close",
+        font=("Arial", 12, "bold"),
+        bg="#008CBA",
+        fg="white",
+        command=history_window.destroy,
+    )
+    close_button.grid(row=2, column=2, pady=10, sticky="w")
+
+
+def open_view_tickets_window():
+    events_window = tk.Toplevel(root)
+    events_window.title("View Tickets")
+    events_window.geometry("400x400")
+    events_window.configure(bg="#FFE4C4")
+
+    # Add a heading label
+    heading_label = tk.Label(
+        events_window,
+        text="List of Tickets",
+        font=("Arial", 16, "bold"),
+        bg="#FFE4C4",
+        fg="#4B4B4B",
+    )
+    heading_label.pack(pady=10)
+
+    # Get the list of events from the system
+    tickets = system.get_tickets()
+
+    # If no events are available
+    if not tickets:
+        no_events_label = tk.Label(
+            events_window,
+            text="No tickets available.",
+            font=("Arial", 12),
+            bg="#FFE4C4",
+            fg="#4B4B4B",
+        )
+        no_events_label.pack(pady=20)
+        return
+
+    # Create a frame to hold the list of events
+    events_frame = tk.Frame(events_window, bg="#FFE4C4")
+    events_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+    # Add a scrollbar
+    scrollbar = tk.Scrollbar(events_frame, orient="vertical")
+    scrollbar.pack(side="right", fill="y")
+
+    # Create a listbox to display events
+    tickets_listbox = tk.Listbox(
+        events_frame,
+        font=("Arial", 12),
+        bg="#FFFFFF",
+        fg="#000000",
+        yscrollcommand=scrollbar.set,
+        width=50,
+        height=15,
+    )
+    tickets_listbox.pack(side="left", fill="both", expand=True)
+    scrollbar.config(command=tickets_listbox.yview)
+
+    # Populate the listbox with events
+    for ticket in tickets:
+        ticket_name = type(ticket).__name__
+        ticket_price = ticket.get_price()
+        ticket_discount = ticket.get_discount_available()
+        # Insert ticket details in multiline format
+        tickets_listbox.insert(tk.END, f"Name: {ticket_name}")
+        tickets_listbox.insert(tk.END, f"Price: ${ticket_price:.2f}")
+        tickets_listbox.insert(tk.END, f"Discount: {ticket_discount}")
+        # Add a blank line for separation
+        tickets_listbox.insert(tk.END, "*******************")
+
+    # Close button
+    close_button = tk.Button(
+        events_window,
+        text="Close",
+        font=("Arial", 12, "bold"),
+        bg="#008CBA",  # Red button
+        fg="white",
+        command=events_window.destroy,
+    )
+    close_button.pack(pady=10)
+
+
+# Create the main window
+root = tk.Tk()
+root.title("Ticket Booking System")
+window_width = 800
+window_height = 450
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+x_position = (screen_width // 2) - (window_width // 2)
+y_position = (screen_height // 2) - (window_height // 2)
+root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
+root.configure(bg="#FFE4C4")
+
+# Add a heading label
+heading_label = tk.Label(
+    root,
+    text="Ticket Booking System",
+    font=("Arial", 20, "bold"),
+    pady=20,
+    bg="#FFE4C4",
+    fg="#4B4B4B",
+)
+heading_label.pack()
+
+# Add a right-side frame for actions
+right_frame = tk.Frame(root, bg="#F8F8F8", width=200,
+                       relief="solid", borderwidth=1, height=300)
+right_frame.pack(side="right", fill="y", padx=20, pady=10)
+
+# Add buttons inside the right frame
+register_button = tk.Button(
+    right_frame,
+    text="Register Guest",
+    font=("Arial", 12),
+    bg="#ADD8E6",
+    fg="black",
+    width=20,
+    pady=5,
+    command=open_registration_window,
+)
+register_button.pack(pady=10)
+
+delete_button = tk.Button(
+    right_frame,
+    text="Delete Guest",
+    font=("Arial", 12),
+    bg="#ADD8E6",
+    fg="black",
+    width=20,
+    pady=5,
+    command=open_delete_guest_window,
+)
+delete_button.pack(pady=10)
+
+# Add buttons on the left side
+purchase_ticket_button = tk.Button(
+    root,
+    text="Purchase Ticket",
+    font=("Arial", 12),
+    bg="#ADD8E6",
+    fg="black",
+    width=20,
+    pady=5,
+    command=open_purchase_ticket_window,
+)
+purchase_ticket_button.pack(anchor="w", padx=40, pady=10)
+
+view_events_button = tk.Button(
+    root,
+    text="View Events",
+    font=("Arial", 12),
+    bg="#ADD8E6",
+    fg="black",
+    width=20,
+    pady=5,
+    command=open_view_events_window,
+)
+view_events_button.pack(anchor="w", padx=40, pady=10)
+
+view_tickets_button = tk.Button(
+    root,
+    text="View Tickets",
+    font=("Arial", 12),
+    bg="#ADD8E6",
+    fg="black",
+    width=20,
+    pady=5,
+    command=open_view_tickets_window,
+)
+view_tickets_button.pack(anchor="w", padx=40, pady=10)
+
+view_history_button = tk.Button(
+    root,
+    text="View Guest Purchase History",
+    font=("Arial", 12),
+    bg="#ADD8E6",
+    fg="black",
+    width=30,
+    pady=5,
+    command=open_view_purchase_history_window,
+)
+view_history_button.pack(anchor="w", padx=40, pady=10)
+
+
+admin_button = tk.Button(
+    root,
+    text="Admin Dashboard",
+    font=("Arial", 12),
+    bg="#ADD8E6",
+    fg="black",
+    width=20,
+    pady=5,
+    command=admin_dashboard_window,)
+admin_button.pack(anchor="w", padx=40, pady=10)
+
+# Start the tkinter main loop
+root.mainloop()
